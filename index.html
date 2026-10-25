@@ -1,0 +1,418 @@
+<title>Voice Practice Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a single instrument column — live meters up top, time-aligned traces below, notes last. */
+:root{
+  --bg:#f5f1f6; --surface:#ffffff; --ink:#231a28; --muted:#6d6173; --line:#e4dbe7;
+  --accent:#b8406f; --accent2:#24807b; --band:rgba(184,64,111,.13); --scope:#120d16;
+  --f-display:"Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --f-body:"Atkinson Hyperlegible", system-ui, -apple-system, sans-serif;
+  --f-data:"JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#161118; --surface:#211a25; --ink:#f2eaf4; --muted:#a899ae; --line:#382e3d;
+  --accent:#ee7eab; --accent2:#5fc7bf; --band:rgba(238,126,171,.17); --scope:#0b080d; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#161118; --surface:#211a25; --ink:#f2eaf4; --muted:#a899ae; --line:#382e3d;
+  --accent:#ee7eab; --accent2:#5fc7bf; --band:rgba(238,126,171,.17); --scope:#0b080d; color-scheme:dark}
+
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5}
+.wrap{max-width:960px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 48px;display:flex;flex-direction:column;gap:18px}
+h1,h2{font-family:var(--f-display);margin:0;text-wrap:balance}
+h1{font-size:clamp(30px,6vw,46px);font-weight:800;letter-spacing:-.02em;line-height:1.05}
+h2{font-size:18px;font-weight:600}
+.eyebrow{font-family:var(--f-data);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin:0 0 6px}
+.lede{color:var(--muted);margin:8px 0 0;max-width:60ch}
+
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.btn{font:700 15px var(--f-body);border:1.5px solid var(--line);background:var(--surface);color:var(--ink);padding:10px 16px;border-radius:999px;cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.btn:focus-visible,input:focus-visible,audio:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.btn.rec{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.status{font-family:var(--f-data);font-size:12px;color:var(--muted)}
+.status b{color:var(--accent);font-weight:600}
+.note{background:var(--surface);border:1.5px solid var(--accent);border-radius:12px;padding:12px 14px}
+.note p{margin:0 0 6px}.note p:last-child{margin:0}
+
+.meters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+@media (max-width:720px){.meters{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.meter{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.meter .lab{font-family:var(--f-data);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.meter .val{font-family:var(--f-data);font-size:clamp(22px,4.5vw,30px);font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1}
+.meter .val small{font-size:13px;color:var(--muted);font-weight:400;margin-left:4px}
+.meter .sub{font-size:12px;color:var(--muted);min-height:1.5em}
+.scale{position:relative;height:8px;border-radius:4px;background:var(--line);margin-top:4px}
+.scale .zone{position:absolute;top:0;bottom:0;background:var(--band);border-left:2px solid var(--accent);border-right:2px solid var(--accent)}
+.scale .mk{position:absolute;top:-4px;width:4px;height:16px;border-radius:2px;background:var(--ink);transform:translateX(-2px);transition:left .12s}
+.scale .mk[hidden]{display:none}
+.ends{display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;min-width:0}
+.ph{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;justify-content:space-between;margin-bottom:8px}
+.hint{font-size:12px;color:var(--muted)}
+canvas.trace{display:block;width:100%;height:170px}
+.scope{background:var(--scope);border-radius:8px;position:relative;overflow:hidden}
+#specCv{display:block;width:100%;height:180px;image-rendering:auto}
+.scope .empty{position:absolute;inset:0;display:grid;place-items:center;color:#cbbfd0;font-size:13px;padding:12px;text-align:center}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+@media (max-width:720px){.grid2{grid-template-columns:minmax(0,1fr)}}
+dl.sum{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0}
+dl.sum dt{color:var(--muted);font-size:13px}
+dl.sum dd{margin:0;font-family:var(--f-data);font-size:14px;font-variant-numeric:tabular-nums;text-align:right}
+audio{width:100%;margin-top:12px}
+.phrase{font-family:var(--f-display);font-size:22px;font-weight:600;line-height:1.3;margin:6px 0 12px;text-wrap:balance}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.field{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+.field input{font:600 15px var(--f-data);width:96px;padding:8px 10px;border-radius:8px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink)}
+.guide{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 24px}
+@media (max-width:720px){.guide{grid-template-columns:minmax(0,1fr)}}
+.guide h3{font-family:var(--f-display);font-size:16px;margin:0 0 4px}
+.guide p{margin:0;color:var(--ink);max-width:62ch}
+.guide p+p{margin-top:6px;color:var(--muted);font-size:14px}
+ol.steps{margin:6px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:6px;max-width:68ch}
+code{font-family:var(--f-data);font-size:13px;background:var(--bg);padding:1px 5px;border-radius:4px}
+.tag{font-family:var(--f-data);font-size:11px;letter-spacing:.08em;text-transform:uppercase;background:var(--band);color:var(--accent);padding:2px 8px;border-radius:999px}
+@media (prefers-reduced-motion:reduce){.scale .mk{transition:none}}
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Pitch · resonance · vocal weight · loudness</p>
+    <h1>Voice Practice Lab</h1>
+    <p class="lede">A free voice training meter. All the analysis runs on your own device, and nothing you say is uploaded or saved anywhere.</p>
+  </header>
+
+  <section class="controls" aria-label="Input">
+    <button id="micBtn" class="btn primary" type="button">Start live mic</button>
+    <button id="stopBtn" class="btn rec" type="button" hidden>Stop</button>
+    <label class="btn" for="fileIn">Analyse a recording</label>
+    <input id="fileIn" class="vh" type="file" accept="audio/*,.m4a,.mp3,.wav,.aac">
+    <span id="status" class="status"><b>Example data.</b> Start the mic or analyse a recording to replace it.</span>
+  </section>
+
+  <div id="micErr" class="note" hidden>
+    <p><b>The microphone is blocked here.</b> Pages opened inside the Claude app aren't allowed to use the mic.</p>
+    <p>You can still record in Voice Memos, then tap the recording, Share, Save to Files, and use <b>Analyse a recording</b>. For live mode, open this page from its own web address (see “Running it live” at the bottom).</p>
+  </div>
+
+  <section class="meters" aria-label="Live readings">
+    <div class="meter">
+      <span class="lab">Pitch</span>
+      <span class="val" id="vPitch">—</span>
+      <span class="sub" id="sPitch">&nbsp;</span>
+      <div class="scale" id="kPitch"><div class="zone"></div><div class="mk" hidden></div></div>
+      <div class="ends"><span>80 Hz</span><span>320 Hz</span></div>
+    </div>
+    <div class="meter">
+      <span class="lab">Resonance</span>
+      <span class="val" id="vRes">—</span>
+      <span class="sub" id="sRes">&nbsp;</span>
+      <div class="scale" id="kRes"><div class="zone"></div><div class="mk" hidden></div></div>
+      <div class="ends"><span>darker</span><span>brighter</span></div>
+    </div>
+    <div class="meter">
+      <span class="lab">Vocal weight</span>
+      <span class="val" id="vWeight">—</span>
+      <span class="sub" id="sWeight">&nbsp;</span>
+      <div class="scale" id="kWeight"><div class="zone"></div><div class="mk" hidden></div></div>
+      <div class="ends"><span>heavier</span><span>lighter</span></div>
+    </div>
+    <div class="meter">
+      <span class="lab">Loudness</span>
+      <span class="val" id="vLoud">—</span>
+      <span class="sub" id="sLoud">&nbsp;</span>
+      <div class="scale" id="kLoud"><div class="zone"></div><div class="mk" hidden></div></div>
+      <div class="ends"><span>quiet</span><span>loud</span></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="ph"><h2>Pitch over time</h2><span class="hint">Shaded band is your target range. Hz on the left.</span></div>
+    <canvas id="pitchCv" class="trace" aria-label="Pitch trace"></canvas>
+  </section>
+
+  <section class="panel">
+    <div class="ph"><h2>Resonance over time</h2><span class="hint">0 = typical adult male formants, 100 = typical adult female</span></div>
+    <canvas id="resCv" class="trace" aria-label="Resonance trace"></canvas>
+  </section>
+
+  <section class="panel">
+    <div class="ph"><h2>Spectrogram</h2><span class="hint">0–5 kHz. Green dots mark the first three formants (F1–F3).</span></div>
+    <div class="scope"><canvas id="specCv" width="360" height="426" aria-label="Spectrogram"></canvas><div class="empty" id="specEmpty">The spectrogram fills in once you record or analyse a file.</div></div>
+  </section>
+
+  <section class="grid2">
+    <div class="panel">
+      <div class="ph"><h2>Session summary</h2><span class="tag" id="sumTag">Example</span></div>
+      <dl class="sum" id="sum"></dl>
+      <audio id="player" controls hidden></audio>
+    </div>
+    <div class="panel">
+      <div class="ph"><h2>Practice phrase</h2><button class="btn" id="nextBtn" type="button">Next phrase</button></div>
+      <p class="phrase" id="phrase"></p>
+      <div class="row">
+        <label class="field" for="tLo">Target low (Hz)<input id="tLo" type="number" min="80" max="400" step="5"></label>
+        <label class="field" for="tHi">Target high (Hz)<input id="tHi" type="number" min="80" max="400" step="5"></label>
+      </div>
+      <p class="hint" style="margin:10px 0 0">A common feminine speaking range is about 165–255 Hz. 145–175 Hz reads as androgynous. Aim to sit comfortably in range, not at the top of it.</p>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="ph"><h2>What the numbers mean</h2></div>
+    <div class="guide">
+      <div><h3>Pitch</h3><p>How high or low your voice is. Get into range, then stop chasing it. A strained high pitch sounds less feminine, not more.</p><p>The summary's “melody” number is how much your pitch moves around. More movement sounds more expressive.</p></div>
+      <div><h3>Resonance</h3><p>How big or small your vocal tract sounds, measured from the formants (F2 and F3). This matters more than pitch for being read as a woman.</p><p>Raise it with a higher larynx and a smaller mouth space: the “big dog, small dog” panting drill, or sliding from “mmm” into speech.</p></div>
+      <div><h3>Vocal weight</h3><p>The gap between your first two harmonics (H1–H2). Thick, buzzy vocal folds give a low number and a lighter fold contact gives a higher one.</p><p>Lighter is the goal, but don't go breathy. If loudness drops a lot when weight goes up, you're adding air instead of thinning the folds.</p></div>
+      <div><h3>Loudness</h3><p>Relative to your phone's mic, so only compare it with your own sessions. Use it to check you aren't getting quieter to sound feminine.</p><p>All numbers are rough estimates. Your ears are the final judge, so listen back to every session.</p></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="ph"><h2>Running it live</h2></div>
+    <p style="margin:0;max-width:68ch">Browsers only allow the mic on a secure web address. To use live mode on your iPhone, put this same page file online:</p>
+    <ol class="steps">
+      <li>Easiest: go to <code>app.netlify.com/drop</code> on your computer and drag the HTML file in. You get an https link you can open in Safari and add to your Home Screen.</li>
+      <li>Or put it in a GitHub repo and turn on GitHub Pages.</li>
+      <li>On your PC only: run <code>python3 -m http.server</code> in the file's folder and open <code>localhost:8000</code>. Localhost counts as secure.</li>
+    </ol>
+  </section>
+</div>
+
+<script>
+(function(){
+"use strict";
+const $=s=>document.querySelector(s);
+const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+
+/* ---------- settings ---------- */
+let target=store.get("vpl-target",{lo:165,hi:255});
+$("#tLo").value=target.lo;$("#tHi").value=target.hi;
+function onTarget(){const lo=+$("#tLo").value,hi=+$("#tHi").value;if(lo>=60&&hi>lo&&hi<=500){target={lo,hi};store.set("vpl-target",target);redraw()}}
+$("#tLo").addEventListener("change",onTarget);$("#tHi").addEventListener("change",onTarget);
+
+const PHRASES=["Could you pass me the blue mug on the second shelf?","I'm heading into town later, do you need anything?","That's such a good idea, I hadn't thought of that at all.","The bus was late again, so I just walked home.","Hi, I'm calling about the booking for Saturday morning.","Honestly, the coffee here is better than it looks.","We should go to the beach if the weather holds up.","Sorry, could you say that again? It's really loud in here.","My brother's moving flats this weekend, so I'm helping out.","Mmm-hmm, yeah, no, that totally makes sense."];
+let pi=Math.floor(Math.random()*PHRASES.length);
+function showPhrase(){$("#phrase").textContent="“"+PHRASES[pi]+"”"}
+$("#nextBtn").addEventListener("click",()=>{pi=(pi+1)%PHRASES.length;showPhrase()});showPhrase();
+
+/* ---------- DSP ---------- */
+const FRAME=2048,NFFT=4096;
+const hann=new Float32Array(FRAME);for(let i=0;i<FRAME;i++)hann[i]=0.5-0.5*Math.cos(2*Math.PI*i/(FRAME-1));
+const re=new Float64Array(NFFT),im=new Float64Array(NFFT);
+function fft(re,im){const n=re.length;for(let i=1,j=0;i<n;i++){let bit=n>>1;for(;j&bit;bit>>=1)j^=bit;j^=bit;if(i<j){let t=re[i];re[i]=re[j];re[j]=t;t=im[i];im[i]=im[j];im[j]=t}}
+  for(let len=2;len<=n;len<<=1){const ang=-2*Math.PI/len,wr=Math.cos(ang),wi=Math.sin(ang),h=len>>1;for(let i=0;i<n;i+=len){let cr=1,ci=0;for(let k=0;k<h;k++){const a=i+k,b=a+h,tr=re[b]*cr-im[b]*ci,ti=re[b]*ci+im[b]*cr;re[b]=re[a]-tr;im[b]=im[a]-ti;re[a]+=tr;im[a]+=ti;const n2=cr*wr-ci*wi;ci=cr*wi+ci*wr;cr=n2}}}}
+
+function yin(buf,sr){
+  const W=buf.length>>1,tauMin=Math.floor(sr/520),tauMax=Math.min(W-2,Math.floor(sr/65));
+  const c=new Float32Array(tauMax+2);let run=0;c[0]=1;
+  for(let tau=1;tau<=tauMax+1;tau++){let s=0;for(let i=0;i<W;i++){const x=buf[i]-buf[i+tau];s+=x*x}run+=s;c[tau]=run>0?s*tau/run:1}
+  let tau=-1;for(let t=tauMin;t<=tauMax;t++){if(c[t]<0.15){while(t+1<=tauMax&&c[t+1]<c[t])t++;tau=t;break}}
+  if(tau<1)return null;
+  const a=c[tau-1],b=c[tau],d=c[tau+1],den=a+d-2*b,sh=den?(a-d)/(2*den):0;
+  return sr/(tau+sh);
+}
+
+function formants(buf,sr){
+  const fac=Math.max(1,Math.round(sr/11000)),fs=sr/fac,n=Math.floor(buf.length/fac);
+  const x=new Float64Array(n);for(let i=0;i<n;i++){let s=0;for(let k=0;k<fac;k++)s+=buf[i*fac+k];x[i]=s/fac}
+  for(let i=n-1;i>0;i--)x[i]-=0.94*x[i-1];
+  for(let i=0;i<n;i++)x[i]*=0.54-0.46*Math.cos(2*Math.PI*i/(n-1));
+  const p=12,r=new Float64Array(p+1);
+  for(let l=0;l<=p;l++){let s=0;for(let i=l;i<n;i++)s+=x[i]*x[i-l];r[l]=s}
+  if(!(r[0]>0))return null;r[0]*=1.0001;
+  let a=new Float64Array(p+1);a[0]=1;let e=r[0];
+  for(let i=1;i<=p;i++){let acc=r[i];for(let j=1;j<i;j++)acc+=a[j]*r[i-j];const k=-acc/e,t=a.slice();for(let j=1;j<i;j++)a[j]=t[j]+k*t[i-j];a[i]=k;e*=1-k*k;if(e<=0)return null}
+  const M=256,nyq=fs/2,env=new Float64Array(M);
+  for(let m=0;m<M;m++){const w=Math.PI*m/M;let rr=0,ii=0;for(let j=0;j<=p;j++){rr+=a[j]*Math.cos(w*j);ii-=a[j]*Math.sin(w*j)}env[m]=-10*Math.log10(rr*rr+ii*ii+1e-20)}
+  const pk=[];for(let m=1;m<M-1;m++){if(env[m]>env[m-1]&&env[m]>=env[m+1]){const f=m*nyq/M;if(f>200&&f<4800)pk.push(f)}}
+  return pk.length>=3?pk.slice(0,3):null;
+}
+
+const GATE=-52;
+function analyze(buf,sr){
+  let ss=0;for(let i=0;i<buf.length;i++)ss+=buf[i]*buf[i];
+  const db=20*Math.log10(Math.sqrt(ss/buf.length)+1e-9);
+  re.fill(0);im.fill(0);for(let i=0;i<FRAME;i++)re[i]=buf[i]*hann[i];
+  fft(re,im);
+  const binHz=sr/NFFT,maxBin=Math.min(NFFT/2,Math.floor(5000/binHz));
+  const spec=new Float32Array(maxBin);for(let k=0;k<maxBin;k++)spec[k]=10*Math.log10(re[k]*re[k]+im[k]*im[k]+1e-12);
+  const out={db,f0:null,F:null,h12:null,spec};
+  if(db<GATE)return out;
+  const f0=yin(buf,sr);if(!f0||f0<65||f0>520)return out;
+  out.f0=f0;
+  const peak=f=>{let m=-1e9;const a=Math.floor(f*0.88/binHz),b=Math.ceil(f*1.12/binHz);for(let k=a;k<=b&&k<maxBin;k++)if(spec[k]>m)m=spec[k];return m};
+  out.h12=peak(f0)-peak(2*f0);
+  out.F=formants(buf,sr);
+  return out;
+}
+const resScore=F=>F?0.5*(F[1]-1500)/300+0.5*(F[2]-2500)/400:null;
+
+/* ---------- session state ---------- */
+let S={mode:"example",frames:[],sr:48000,dur:12};
+let ema={res:null,h12:null};
+function pushFrame(r,t){
+  let res=resScore(r.F);if(res!=null&&(res<-1.5||res>2.5))res=null;
+  if(res!=null)ema.res=ema.res==null?res:ema.res+0.12*(res-ema.res);
+  if(r.h12!=null&&isFinite(r.h12))ema.h12=ema.h12==null?r.h12:ema.h12+0.15*(r.h12-ema.h12);
+  S.frames.push({t,f0:r.f0,F:r.F,res,resS:r.f0!=null?ema.res:null,h12:r.f0!=null?r.h12:null,db:r.db});
+}
+
+/* example session, clearly labelled */
+(function seed(){let t=0,ph=0;const fr=[];let rs=0.55,next=0;
+  while(t<12){const inPhrase=(t%3)<2.4;
+    if(inPhrase){const u=(t%3)/2.4;const f0=205+22*Math.sin(t*5.1)+14*Math.sin(t*1.7)-30*u*u;rs+=0.08*((0.58+0.18*Math.sin(t*2.3))-rs);
+      fr.push({t,f0,F:[620,1720+120*Math.sin(t*6),2780],res:rs,resS:rs,h12:5+1.5*Math.sin(t*3),db:-28+3*Math.sin(t*4)})}
+    else fr.push({t,f0:null,F:null,res:null,resS:null,h12:null,db:-60});
+    t+=0.03}
+  S.frames=fr;})();
+
+/* ---------- drawing ---------- */
+function tok(){const cs=getComputedStyle(document.documentElement);const g=n=>cs.getPropertyValue(n).trim();return{ink:g("--ink"),muted:g("--muted"),line:g("--line"),accent:g("--accent"),accent2:g("--accent2"),band:g("--band")}}
+function fit(cv){const r=cv.getBoundingClientRect(),d=window.devicePixelRatio||1,w=Math.max(1,Math.round(r.width*d)),h=Math.max(1,Math.round(r.height*d));if(cv.width!==w||cv.height!==h){cv.width=w;cv.height=h}return{w,h,d}}
+let cursorT=null;
+function win(){if(S.mode==="live"){const now=S.frames.length?S.frames[S.frames.length-1].t:0;return[Math.max(0,now-12),Math.max(12,now)]}return[0,Math.max(1,S.dur)]}
+function trace(cv,o){
+  const{w,h,d}=fit(cv),g=cv.getContext("2d"),T=tok();g.clearRect(0,0,w,h);
+  const L=44*d,R=8*d,Tp=8*d,B=20*d,[t0,t1]=win();
+  const X=t=>L+(t-t0)/(t1-t0)*(w-L-R),Y=v=>Tp+(1-(v-o.min)/(o.max-o.min))*(h-Tp-B);
+  if(o.band){const y1=Y(Math.min(o.band[1],o.max)),y0=Y(Math.max(o.band[0],o.min));g.fillStyle=T.band;g.fillRect(L,y1,w-L-R,y0-y1)}
+  g.font=(11*d)+'px "JetBrains Mono", ui-monospace, monospace';g.textAlign="right";g.textBaseline="middle";g.lineWidth=d;
+  for(const gl of o.grid){const y=Y(gl[0]);g.strokeStyle=T.line;g.beginPath();g.moveTo(L,y);g.lineTo(w-R,y);g.stroke();g.fillStyle=T.muted;g.fillText(gl[1],L-6*d,y)}
+  g.textAlign="center";g.textBaseline="top";const span=t1-t0,step=span>60?15:span>30?5:span>14?3:2;
+  for(let t=Math.ceil(t0/step)*step;t<=t1+1e-6;t+=step){const x=X(t);if(x<L+8*d)continue;g.fillStyle=T.muted;g.fillText(Math.round(t)+"s",x,h-B+5*d)}
+  g.strokeStyle=o.color;g.lineWidth=2.2*d;g.lineJoin="round";g.lineCap="round";g.beginPath();let prev=null;
+  for(const f of S.frames){if(f.t<t0-0.2)continue;const v=o.get(f);if(v==null){prev=null;continue}const x=X(f.t),y=Y(Math.max(o.min,Math.min(o.max,v)));if(prev!=null&&f.t-prev<0.12)g.lineTo(x,y);else{g.moveTo(x,y);g.lineTo(x+0.5,y)}prev=f.t}
+  g.stroke();
+  if(cursorT!=null){g.strokeStyle=T.ink;g.lineWidth=1.5*d;const x=X(cursorT);g.beginPath();g.moveTo(x,Tp);g.lineTo(x,h-B);g.stroke()}
+}
+function redraw(){const T=tok();
+  trace($("#pitchCv"),{min:70,max:340,band:[target.lo,target.hi],grid:[[100,"100"],[150,"150"],[200,"200"],[250,"250"],[300,"300"]],color:T.accent,get:f=>f.f0});
+  trace($("#resCv"),{min:-50,max:150,band:null,grid:[[-50,"-50"],[0,"0"],[50,"50"],[100,"100"],[150,"150"]],color:T.accent2,get:f=>f.resS==null?null:f.resS*100});
+  updateMeters();updateSummary();
+}
+
+/* spectrogram */
+const LUT=(()=>{const st=[[0,[12,9,16]],[.3,[58,30,92]],[.55,[168,52,108]],[.78,[240,132,74]],[1,[252,236,170]]],o=new Uint8ClampedArray(256*3);
+  for(let i=0;i<256;i++){const v=i/255;let k=0;while(k<st.length-2&&v>st[k+1][0])k++;const[a,ca]=st[k],[b,cb]=st[k+1],u=(v-a)/(b-a);for(let c=0;c<3;c++)o[i*3+c]=ca[c]+(cb[c]-ca[c])*u}return o})();
+const spc=$("#specCv"),sg=spc.getContext("2d");let specMax=-40,colImg=null;
+function specReset(H,W){spc.height=H;spc.width=W;sg.fillStyle="#0c0910";sg.fillRect(0,0,W,H);colImg=sg.createImageData(1,H);specMax=-40}
+function specCol(x,spec,F,sr){const H=spec.length;if(!colImg||colImg.height!==H)colImg=sg.createImageData(1,H);
+  let m=-200;for(let k=0;k<H;k++)if(spec[k]>m)m=spec[k];specMax=Math.max(specMax-0.05,m);
+  const lo=specMax-72;for(let r=0;r<H;r++){let v=(spec[H-1-r]-lo)/72;v=v<0?0:v>1?1:v;const i=Math.round(v*255)*3,p=r*4;colImg.data[p]=LUT[i];colImg.data[p+1]=LUT[i+1];colImg.data[p+2]=LUT[i+2];colImg.data[p+3]=255}
+  sg.putImageData(colImg,x,0);
+  if(F){const binHz=sr/NFFT;sg.fillStyle="#7dffc8";for(const f of F){const r=H-1-Math.round(f/binHz);if(r>1&&r<H-1)sg.fillRect(x,r-1,1,3)}}}
+
+/* ---------- meters & summary ---------- */
+function setScale(id,v,min,max,lo,hi){const el=$(id),z=el.querySelector(".zone"),mk=el.querySelector(".mk"),P=x=>Math.max(0,Math.min(100,(x-min)/(max-min)*100));
+  z.style.left=P(lo)+"%";z.style.width=(P(hi)-P(lo))+"%";if(v==null||!isFinite(v)){mk.hidden=true}else{mk.hidden=false;mk.style.left=P(v)+"%"}}
+const NOTES=["C","C♯","D","D♯","E","F","F♯","G","G♯","A","A♯","B"];
+const note=f=>{const m=Math.round(69+12*Math.log2(f/440));return NOTES[(m%12+12)%12]+(Math.floor(m/12)-1)};
+const median=a=>{if(!a.length)return null;const s=a.slice().sort((x,y)=>x-y),h=s.length>>1;return s.length%2?s[h]:(s[h-1]+s[h])/2};
+const pct=(a,q)=>{if(!a.length)return null;const s=a.slice().sort((x,y)=>x-y);return s[Math.min(s.length-1,Math.floor(q*(s.length-1)))]};
+function resWord(r){return r==null?"":r<0.25?"darker, chest-y":r<0.6?"in between":r<0.9?"fairly bright":"bright"}
+function weightWord(h){return h==null?"":h<2?"heavy, buzzy":h<5?"medium":h<10?"light":"very light, check for breathiness"}
+
+function current(){ // live: last ~0.5 s; otherwise whole session
+  const fr=S.frames;if(!fr.length)return{};
+  if(S.mode!=="live")return agg(fr);
+  const now=fr[fr.length-1].t,rec=fr.filter(f=>f.t>now-0.5),v=rec.filter(f=>f.f0!=null);
+  return{f0:median(v.map(f=>f.f0)),res:v.length?ema.res:null,h12:v.length?ema.h12:null,db:fr[fr.length-1].db,live:true};
+}
+function agg(fr){const v=fr.filter(f=>f.f0!=null);return{f0:median(v.map(f=>f.f0)),res:median(v.filter(f=>f.res!=null).map(f=>f.res)),h12:median(v.filter(f=>f.h12!=null).map(f=>f.h12)),db:median(v.map(f=>f.db))}}
+function updateMeters(){const c=current(),lab=c.live?"":"session median";
+  $("#vPitch").innerHTML=c.f0?Math.round(c.f0)+"<small>Hz</small>":"—";
+  $("#sPitch").textContent=c.f0?(note(c.f0)+(c.f0>=target.lo&&c.f0<=target.hi?" · in range":c.f0<target.lo?" · below range":" · above range")):(c.live?"listening…":lab);
+  setScale("#kPitch",c.f0,80,320,target.lo,target.hi);
+  $("#vRes").innerHTML=c.res!=null?Math.round(c.res*100)+"<small>/100</small>":"—";
+  $("#sRes").textContent=c.res!=null?resWord(c.res):" ";
+  setScale("#kRes",c.res!=null?c.res*100:null,-50,150,70,150);
+  $("#vWeight").innerHTML=c.h12!=null?c.h12.toFixed(1)+"<small>dB</small>":"—";
+  $("#sWeight").textContent=c.h12!=null?weightWord(c.h12):" ";
+  setScale("#kWeight",c.h12,-6,16,4,10);
+  $("#vLoud").innerHTML=c.db!=null&&isFinite(c.db)?Math.round(c.db)+"<small>dBFS</small>":"—";
+  $("#sLoud").textContent=c.db!=null?(c.db<GATE?"too quiet to measure":"relative to your mic"):" ";
+  setScale("#kLoud",c.db,-70,0,-40,-12);
+}
+function updateSummary(){
+  const v=S.frames.filter(f=>f.f0!=null),dl=$("#sum");
+  if(!v.length){dl.innerHTML="<dt>No voice detected yet</dt><dd>—</dd>";return}
+  const f0s=v.map(f=>f.f0),med=median(f0s),inR=v.filter(f=>f.f0>=target.lo&&f.f0<=target.hi).length/v.length;
+  const st=f0s.map(f=>12*Math.log2(f/med)),mu=st.reduce((a,b)=>a+b,0)/st.length,sd=Math.sqrt(st.reduce((a,b)=>a+(b-mu)*(b-mu),0)/st.length);
+  const Fs=v.filter(f=>f.F),F=[0,1,2].map(i=>median(Fs.map(f=>f.F[i])));
+  const res=median(v.filter(f=>f.res!=null).map(f=>f.res)),h=median(v.filter(f=>f.h12!=null).map(f=>f.h12)),db=median(v.map(f=>f.db));
+  const rows=[["Voiced time",(v.length*0.03).toFixed(1)+" s"],["Median pitch",Math.round(med)+" Hz ("+note(med)+")"],["Typical range",Math.round(pct(f0s,.1))+"–"+Math.round(pct(f0s,.9))+" Hz"],["Time in target",Math.round(inR*100)+"%"],["Melody (pitch movement)",sd.toFixed(1)+" semitones"],["Resonance",res!=null?Math.round(res*100)+" / 100":"—"],["Formants F1 / F2 / F3",F[0]?F.map(x=>Math.round(x)).join(" / ")+" Hz":"—"],["Vocal weight (H1–H2)",h!=null?h.toFixed(1)+" dB":"—"],["Loudness",Math.round(db)+" dBFS"]];
+  dl.innerHTML="";for(const[k,val]of rows){const dt=document.createElement("dt"),dd=document.createElement("dd");dt.textContent=k;dd.textContent=val;dl.append(dt,dd)}
+}
+
+/* ---------- live mic ---------- */
+let ctx=null,stream=null,an=null,tbuf=null,raf=0,rec=null,chunks=[],lastT=-1,sumTick=0;
+const status=h=>$("#status").innerHTML=h;
+$("#micBtn").addEventListener("click",async()=>{
+  stopLive();
+  const AC=window.AudioContext||window.webkitAudioContext;ctx=new AC();
+  try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}})}
+  catch(e){try{ctx.close()}catch(_){}ctx=null;$("#micErr").hidden=false;status("<b>Mic unavailable.</b> Analyse a recording instead.");return}
+  $("#micErr").hidden=true;
+  try{await ctx.resume()}catch(_){}
+  const src=ctx.createMediaStreamSource(stream);an=ctx.createAnalyser();an.fftSize=FRAME;src.connect(an);tbuf=new Float32Array(FRAME);
+  S={mode:"live",frames:[],sr:ctx.sampleRate,dur:0,t0:ctx.currentTime};ema={res:null,h12:null};lastT=-1;
+  specReset(Math.floor(5000/(S.sr/NFFT)),360);$("#specEmpty").hidden=true;
+  setPlayer(null);chunks=[];
+  if(window.MediaRecorder){try{rec=new MediaRecorder(stream);rec.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data)};rec.onstop=()=>{if(chunks.length)setPlayer(URL.createObjectURL(new Blob(chunks,{type:rec.mimeType||"audio/mp4"})))};rec.start()}catch(_){rec=null}}
+  $("#micBtn").hidden=true;$("#stopBtn").hidden=false;$("#sumTag").textContent="Live";
+  status("<b>Listening.</b> Read the practice phrase out loud.");
+  loop();
+});
+function loop(){if(S.mode!=="live"||!an)return;
+  an.getFloatTimeDomainData(tbuf);const t=ctx.currentTime-S.t0;
+  if(t-lastT>=0.03){lastT=t;const r=analyze(tbuf,S.sr);pushFrame(r,t);S.dur=t;
+    sg.drawImage(spc,-1,0);specCol(spc.width-1,r.spec,r.F,S.sr);
+    const T=tok();
+    trace($("#pitchCv"),{min:70,max:340,band:[target.lo,target.hi],grid:[[100,"100"],[150,"150"],[200,"200"],[250,"250"],[300,"300"]],color:T.accent,get:f=>f.f0});
+    trace($("#resCv"),{min:-50,max:150,band:null,grid:[[-50,"-50"],[0,"0"],[50,"50"],[100,"100"],[150,"150"]],color:T.accent2,get:f=>f.resS==null?null:f.resS*100});
+    updateMeters();if(++sumTick%15===0)updateSummary()}
+  raf=requestAnimationFrame(loop)}
+function stopLive(){cancelAnimationFrame(raf);
+  if(rec&&rec.state!=="inactive"){try{rec.stop()}catch(_){}}rec=rec&&rec.state==="inactive"?rec:rec;
+  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
+  if(ctx){try{ctx.close()}catch(_){}ctx=null}an=null;
+  if(S.mode==="live"){S.mode="done";S.dur=S.frames.length?S.frames[S.frames.length-1].t:1;status("<b>Stopped.</b> Listen back below, or start again.");$("#sumTag").textContent="Last session";redraw()}
+  $("#micBtn").hidden=false;$("#stopBtn").hidden=true}
+$("#stopBtn").addEventListener("click",stopLive);
+
+/* ---------- file analysis ---------- */
+$("#fileIn").addEventListener("change",async e=>{const file=e.target.files&&e.target.files[0];e.target.value="";if(!file)return;
+  stopLive();status("<b>Decoding…</b>");
+  let ab;try{const AC=window.AudioContext||window.webkitAudioContext,ac=new AC();const buf=await file.arrayBuffer();
+    ab=await new Promise((res,rej)=>{const p=ac.decodeAudioData(buf,res,rej);if(p&&p.then)p.then(res,rej)});try{ac.close()}catch(_){}}
+  catch(err){status("<b>Couldn't read that file.</b> Try an .m4a, .mp3 or .wav recording.");return}
+  const data=ab.getChannelData(0),sr=ab.sampleRate,hop=Math.round(sr*0.03),cols=[];
+  S={mode:"file",frames:[],sr,dur:ab.duration};ema={res:null,h12:null};
+  let i=0;await new Promise(done=>{(function chunk(){const end=Math.min(data.length-FRAME,i+hop*80);
+    for(;i<end;i+=hop){const r=analyze(data.subarray(i,i+FRAME),sr);pushFrame(r,i/sr);cols.push({s:r.spec,F:r.F})}
+    if(i<data.length-FRAME){status("<b>Analysing…</b> "+Math.round(i/data.length*100)+"%");setTimeout(chunk,0)}else done()})()});
+  if(cols.length){const W=Math.min(cols.length,1600);specReset(cols[0].s.length,W);for(let x=0;x<W;x++){const c=cols[Math.floor(x*cols.length/W)];specCol(x,c.s,c.F,sr)}$("#specEmpty").hidden=true}
+  $("#sumTag").textContent="Recording";status("<b>"+file.name.replace(/[<>&]/g,"")+"</b> · "+ab.duration.toFixed(1)+" s analysed. Press play to follow along.");
+  setPlayer(URL.createObjectURL(file));redraw();
+});
+
+/* ---------- playback cursor ---------- */
+const player=$("#player");let curUrl=null;
+function setPlayer(url){if(curUrl)URL.revokeObjectURL(curUrl);curUrl=url;if(url){player.src=url;player.hidden=false}else{player.removeAttribute("src");player.hidden=true}cursorT=null}
+function follow(){if(player.paused||S.mode==="live"){cursorT=null;redraw();return}cursorT=player.currentTime;redraw();requestAnimationFrame(follow)}
+player.addEventListener("play",()=>requestAnimationFrame(follow));
+player.addEventListener("seeked",()=>{if(player.paused&&S.mode!=="live"){cursorT=player.currentTime;redraw()}});
+
+/* ---------- boot ---------- */
+let rt=0;window.addEventListener("resize",()=>{clearTimeout(rt);rt=setTimeout(()=>{if(S.mode!=="live")redraw()},120)});
+if(window.matchMedia)matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change",()=>{if(S.mode!=="live")redraw()});
+new MutationObserver(()=>{if(S.mode!=="live")redraw()}).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+redraw();
+})();
+</script>
